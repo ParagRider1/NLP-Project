@@ -34,7 +34,7 @@ def main():
     print("\n--- BASELINE RESULTS ---")
     evaluate(data["test"]["label"], baseline_preds)
 
-    # =========================
+    
     # STS TASK
     # =========================
     print("\n📥 Loading STS dataset...")
@@ -64,7 +64,6 @@ def main():
         print("Pearson Correlation:", correlation[0])
 
 
-    # =========================
     # VISUALIZATION
     # =========================
     print("\n📊 Generating graphs...")
