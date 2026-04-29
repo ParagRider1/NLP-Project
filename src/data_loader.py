@@ -5,3 +5,10 @@ def load_mrpc():
 
 def load_sts():
     return load_dataset("glue", "stsb")
+
+
+def load_qqp():
+    return load_dataset("glue", "qqp")
+
+def load_paws():
+    return load_dataset("paws", "labeled_final")
