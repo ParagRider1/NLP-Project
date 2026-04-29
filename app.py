@@ -268,14 +268,66 @@ with tab2:
     if st.button("📋 Load Sample Document", key="load_sample_doc"):
         st.session_state.doc_input = SAMPLE_DOC
 
-    document_input = st.text_area(
-        "Paste your document here",
-        value=st.session_state.get("doc_input", ""),
-        height=300,
-        placeholder="Paste a multi-paragraph document...\n\nSeparate paragraphs with a blank line.",
-        key="doc_textarea",
+    # ── Input method toggle ─────────────────────────────────────────────────
+    input_method = st.radio(
+        "Input method",
+        options=["📋 Paste Text", "📁 Upload File (PDF / Word)"],
+        horizontal=True,
+        key="input_method",
     )
-    st.session_state.doc_input = document_input
+
+    if input_method == "📁 Upload File (PDF / Word)":
+        uploaded_file = st.file_uploader(
+            "Upload a PDF or Word document",
+            type=["pdf", "docx"],
+            key="doc_uploader",
+        )
+        if uploaded_file is not None:
+            import io
+            if uploaded_file.name.endswith(".pdf"):
+                try:
+                    import pdfplumber
+                    import re
+
+                    with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
+                        full_text = "\n".join(
+                            page.extract_text() for page in pdf.pages
+                            if page.extract_text()
+                        )
+
+                    # 🔥 FIX: Split into actual paragraphs
+                    paragraphs = re.split(r'\n?Paragraph\s+\d+\n', full_text)
+
+                    # clean empty entries
+                    paragraphs = [p.strip() for p in paragraphs if p.strip()]
+
+                    # format back for your pipeline
+                    extracted = "\n\n".join(paragraphs)
+
+                    st.session_state.doc_input = extracted
+                    st.success(f"✅ Extracted {len(paragraphs)} paragraphs from PDF")
+                except ImportError:
+                    st.error("❌ pdfplumber not installed. Run: pip install pdfplumber")
+            elif uploaded_file.name.endswith(".docx"):
+                try:
+                    import docx
+                    doc = docx.Document(io.BytesIO(uploaded_file.read()))
+                    paragraphs_raw = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+                    extracted = "\n\n".join(paragraphs_raw)
+                    st.session_state.doc_input = extracted
+                    st.success(f"✅ Extracted text from Word doc ({len(paragraphs_raw)} paragraphs)")
+                except ImportError:
+                    st.error("❌ python-docx not installed. Run: pip install python-docx")
+        document_input = st.session_state.get("doc_input", "")
+    else:
+        document_input = st.text_area(
+            "Paste your document here",
+            value=st.session_state.get("doc_input", ""),
+            height=300,
+            placeholder="Paste a multi-paragraph document...\n\nSeparate paragraphs with a blank line.",
+            key="doc_textarea",
+        )
+        st.session_state.doc_input = document_input
 
     dcol1, dcol2 = st.columns([2, 1])
     with dcol1:
@@ -340,31 +392,6 @@ with tab2:
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-
-            # ── Paragraph list with colour-coded flags ──────────────────────
-            st.markdown("---")
-            st.subheader(f"📝 Document — {n} Paragraph(s)")
-            flagged_indices = set()
-            for a, b, _ in rep_pairs:
-                flagged_indices.add(a)
-                flagged_indices.add(b)
-
-            for p in paragraphs:
-                idx = p["index"]
-                is_flagged   = idx in flagged_indices
-                border_color = group_color_map.get(idx, "#444") if rep_pairs else "#444"
-                if is_flagged:
-                    flag_label = f'&nbsp;<span style="color:{border_color};font-weight:bold;">● Repetitive</span>'
-                else:
-                    flag_label = ""
-                st.markdown(
-                    f'<div style="border-left:4px solid {border_color};padding:8px 14px;'
-                    f'margin-bottom:10px;border-radius:4px;">'
-                    f'<strong>Paragraph {idx}</strong>{flag_label}<br>'
-                    f'<span style="font-size:0.88em;color:#aaa;">{p["preview"]}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
 
             # ── Repetitive pairs detail with sentence overlap ───────────────
             if rep_pairs:
@@ -478,6 +505,12 @@ with tab2:
                         report_lines.append(f"         B: {sb}")
                 report_lines.append("")
 
+            # 🔥 FIX: define flagged_indices
+            flagged_indices = set()
+            for a, b, _ in rep_pairs:
+                flagged_indices.add(a)
+                flagged_indices.add(b)
+                
             report_lines.append("--- Full Paragraph Texts ---")
             for p in paragraphs:
                 flag = " [REPETITIVE]" if p["index"] in flagged_indices else ""
